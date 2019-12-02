@@ -164,7 +164,8 @@ func bestSellersRank(html string) ([]string, []string) {
 	rank := regexp.MustCompile("#\\s*([0-9,]+)")                                           //find rank
 	rankin1 := regexp.MustCompile("in\\s*([0-9A-Za-z &-]+)\\s*<<a href='/gp/bestsellers/") //find rank in
 	rankin2 := regexp.MustCompile(">\\s*([0-9A-Za-z &'-]+)</a></span>")                    //find rank in
-	for _, value := range strings.Split(html, "\n") {
+	spiltHtml := strings.Split(html, "\n")
+	for n, value := range spiltHtml {
 		if strings.Contains(value, "<a href='/gp/bestsellers/") { //style 1
 			value = strings.TrimSpace(strings.ReplaceAll(value, "(", "<"))
 			if len(rankin1.FindStringSubmatch(value)) > 1 {
@@ -188,9 +189,9 @@ func bestSellersRank(html string) ([]string, []string) {
 					rankseller = append(rankseller, rank.FindStringSubmatch(value)[1])
 				}
 			} else if strings.Contains(value, "zg_hrsr_ladder") {
-				if len(rankin2.FindStringSubmatch(value)) > 1 && len(rankstyle2.FindStringSubmatch(html)) > 1 {
+				if len(rankin2.FindStringSubmatch(value)) > 1 && len(rankstyle2.FindStringSubmatch(spiltHtml[n-1])) > 1 {
 					result = append(result, rankin2.FindStringSubmatch(value)[1])
-					rankseller = append(rankseller, rankstyle2.FindStringSubmatch(html)[1])
+					rankseller = append(rankseller, rankstyle2.FindStringSubmatch(spiltHtml[n-1])[1])
 				}
 			}
 		}
