@@ -56,8 +56,9 @@ type item struct {
 func queryhtmlToResp(url string) *http.Response {
 	client := &http.Client{}
 	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36")
-	req.Header.Set("cookie", "session-id=137-3436788-4375040")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.130 Safari/537.36")
+	req.Header.Set("cookie", "session-id=131-2340817-4143446; session-id-time=2082787201l; i18n-prefs=USD; ubid-main=130-9943017-9783306; x-wl-uid=1r1GuTQO+ZdaxMTNCQaBPkPjV1JoH/7k62hv/n+PgwdbaOywIv/oT43QJi0BLCdSKhI+FW+34KLA=; session-token=4AeaDFr6YMU3BeKxCOP9ej4aaWAy3xiLT2Q2fRCepEDfIX0kPhAfuoBjJs/iAgp7YkHp1xzfASB77jXQCVMQxTFMTizSWgIrvacpqsI9bLK/bNKzBnFaAhkaQxSU+kqSSY6L6a+xe6vFsD3mJvw1btT27s8GpnqvZeo17gAtS6Ecmh+zyvCuCm6wjKmHxQ9J+zsgi0Ax4hFIvL3Fl0e/4KlT9gMGILGLM2prBUKgvAK+OEfXVHv1XQQIBLglNhjP; lc-main=en_US; csm-hit=tb:MZ2WFEST02XDVXGHQARH+s-FT70C9NDRSSGTCF8XXWE|1580993848042&t:1580993848042&adb:adblk_yes")
+	req.Header.Set("Referer", url)
 	resp, err := client.Do(req)
 	if err != nil {
 		fmt.Println("http get error", err)
@@ -86,6 +87,7 @@ func queryhtmlToString(url string) (*http.Response, string) {
 	if err != nil {
 		fmt.Println("Read all", err)
 	}
+
 	return resp, string(body)
 }
 
@@ -98,7 +100,7 @@ func otherSeller(url string) ([][]string, string) { //return seller who is not A
 	url = "https://www.amazon.com/gp/offer-listing/" + url
 	//fmt.Println(url)
 	_, response := queryhtmlToString(url)
-	//ioutil.WriteFile("otherSeller", []byte(response), 0777)
+	ioutil.WriteFile("otherSeller", []byte(response), 0777)
 	for _, value := range findotherSeller.FindAllStringSubmatch(response, -1) {
 		if strings.Split(value[1], " and price ")[0] != "Amazon Warehouse" &&
 			strings.Split(value[1], " and price ")[0] != "Primo Super-store" &&
@@ -277,7 +279,7 @@ func output(output []item) {
 func webCrawler() {
 	findSubURL, _ := regexp.Compile("offer-listing/\\s*([0-9a-zA-z?=;/_&]+)")
 
-	content, err := ioutil.ReadFile("url.txt")
+	content, err := ioutil.ReadFile("url")
 	if err != nil {
 		fmt.Println("Read file error: ", err)
 	}
@@ -291,7 +293,12 @@ func webCrawler() {
 		temp.url = strings.TrimSpace(strings.Split(value, "\\")[1]) + "?language=en_US"
 		fmt.Println("Collecting url", temp.url)
 		_, html := queryhtmlToString(temp.url)
+		err = ioutil.WriteFile(temp.name, []byte(html), 0644)
+		if err != nil {
+			panic(err)
+		}
 		if len(findSubURL.FindStringSubmatch(html)) > 1 {
+			fmt.Println(findSubURL.FindStringSubmatch(html))
 			temp.otherseller, temp.price = otherSeller(findSubURL.FindStringSubmatch(html)[1])
 		}
 		temp.buyboxgone = buyBoxGone(html)
@@ -300,14 +307,161 @@ func webCrawler() {
 		temp.currentlyunavailable = currentlyUnavailable(html)
 		product = append(product, temp)
 		fmt.Println(temp)
-		time.Sleep(1000 * time.Millisecond)
+		time.Sleep(5000 * time.Millisecond)
 	}
 	//fmt.Println(product)
 	output(product)
 }
 
+type star struct {
+	name             string
+	onestarurl       string
+	twostarurl       string
+	threestarurl     string
+	productNumber    string
+	onestarmessage   []messages
+	twostarmessage   []messages
+	threestarmessage []messages
+}
+
+type messages struct {
+	message string
+	author  string
+	title   string
+}
+
+func getmessage(input string) []messages {
+	var message []messages
+	context := strings.Split(input, "\n")
+	for index, value := range context {
+		if strings.Contains(value, "customer_review-") {
+			var mess messages
+			author := regexp.MustCompile("<span class=\"a-profile-name\">\\s*([0-9,a-zA-Z]+)")
+			m := regexp.MustCompile("<span>\\s*([0-9,a-zA-Z.'? ]+)\\s*")
+			if len(author.FindStringSubmatch(value)) > 1 {
+				mess.author = author.FindStringSubmatch(value)[1]
+			} else {
+				fmt.Println("can not find author")
+			}
+			if len(m.FindStringSubmatch(context[index+10])) > 1 {
+				mess.title = m.FindStringSubmatch(context[index+10])[1]
+				fmt.Println(mess.title)
+			} else {
+				fmt.Println("can not find title")
+			}
+			if len(m.FindStringSubmatch(context[index+22])) > 1 {
+				mess.message = m.FindStringSubmatch(context[index+22])[1]
+				fmt.Println(mess.message)
+			} else {
+				fmt.Println("can not find message")
+			}
+
+			message = append(message, mess)
+		}
+	}
+	return message
+}
+
+func review() {
+	content, err := ioutil.ReadFile("url")
+	if err != nil {
+		fmt.Println("Read file error: ", err)
+	}
+	body := string(content)
+
+	parseurl := strings.Split(body, "\n")
+	//var threestar []star
+	//var twostar []star
+	//var onestar []star
+	result := []star{}
+	productNum, _ := regexp.Compile("dp/\\s*([0-9a-zA-z?=;_&]+)")
+	for _, value := range parseurl {
+		var temp star
+		temp.productNumber = productNum.FindStringSubmatch(value)[1]
+		fmt.Println(temp.productNumber)
+		temp.name = strings.TrimSpace(strings.Split(value, "\\")[0])
+		temp.onestarurl = "https://www.amazon.com/product-reviews/" + temp.productNumber + "/ref=acr_dp_hist_1?ie=UTF8&filterByStar=one_star&reviewerType=all_reviews#reviews-filter-bar"
+		temp.twostarurl = "https://www.amazon.com/product-reviews/" + temp.productNumber + "/ref=acr_dp_hist_1?ie=UTF8&filterByStar=two_star&reviewerType=all_reviews#reviews-filter-bar"
+		temp.threestarurl = "https://www.amazon.com/product-reviews/" + temp.productNumber + "/ref=acr_dp_hist_1?ie=UTF8&filterByStar=three_star&reviewerType=all_reviews#reviews-filter-bar"
+		_, context := queryhtmlToString(temp.onestarurl)
+		//fmt.Println(context)
+		temp.onestarmessage = getmessage(context)
+
+		_, context = queryhtmlToString(temp.twostarurl)
+		temp.twostarmessage = getmessage(context)
+
+		_, context = queryhtmlToString(temp.threestarurl)
+		temp.threestarmessage = getmessage(context)
+		fmt.Println(temp.onestarmessage)
+		fmt.Println(temp.twostarmessage)
+		fmt.Println(temp.threestarmessage)
+		result = append(result, temp)
+	}
+
+}
+
+/*func reviewoutput(output []star) {
+	file, err := xlsx.OpenFile("reviewformat.xlsx")
+	if err != nil {
+		panic(err)
+	}
+	first := file.Sheets[0]
+	row := first.AddRow()
+	row.SetHeightCM(1)
+	for _, value := range output {
+		cell := row.AddCell()
+		cell.Value = value.name
+		cell = row.AddCell()
+		cell.Value = "one star "
+		cell = row.AddCell()
+		cell.Value = value.price
+		if value.buyboxgone {
+			cell = row.AddCell()
+			cell.Value = "buybox gone"
+		}
+		if value.currentlyunavailable {
+			cell = row.AddCell()
+			cell.Value = "Currently Unavailable"
+		}
+		if value.lightningdeal {
+			cell = row.AddCell()
+			cell.Value = "lightning deal"
+		}
+		for _, j := range value.otherseller {
+			cell = row.AddCell()
+			cell.Value = "other seller"
+			cell = row.AddCell()
+			cell.Value = strings.Join(j, " for ")
+		}
+		for i, j := range value.rank {
+			row = first.AddRow()
+			row.SetHeightCM(1)
+			cell = row.AddCell()
+			cell.Value = value.name
+			cell = row.AddCell()
+			cell.Value = value.leaderboard[i]
+			cell = row.AddCell()
+			cell.Value = j
+		}
+
+		row = first.AddRow()
+		cell = row.AddCell()
+		cell.Value = value.name
+		cell = row.AddCell()
+		cell.Value = "Sold"
+		row = first.AddRow()
+		row.SetHeightCM(1)
+	}
+
+	err = file.Save("Output.xlsx")
+	if err != nil {
+		panic(err)
+	}
+}*/
+
 func main() {
-	webCrawler()
+	//webCrawler()
+	review()
 	fmt.Println("Finish！")
 	fmt.Scanln()
 }
