@@ -56,9 +56,10 @@ type item struct {
 func queryhtmlToResp(url string) *http.Response {
 	client := &http.Client{}
 	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.130 Safari/537.36")
-	req.Header.Set("cookie", "session-id=131-2340817-4143446; session-id-time=2082787201l; i18n-prefs=USD; ubid-main=130-9943017-9783306; x-wl-uid=1r1GuTQO+ZdaxMTNCQaBPkPjV1JoH/7k62hv/n+PgwdbaOywIv/oT43QJi0BLCdSKhI+FW+34KLA=; session-token=4AeaDFr6YMU3BeKxCOP9ej4aaWAy3xiLT2Q2fRCepEDfIX0kPhAfuoBjJs/iAgp7YkHp1xzfASB77jXQCVMQxTFMTizSWgIrvacpqsI9bLK/bNKzBnFaAhkaQxSU+kqSSY6L6a+xe6vFsD3mJvw1btT27s8GpnqvZeo17gAtS6Ecmh+zyvCuCm6wjKmHxQ9J+zsgi0Ax4hFIvL3Fl0e/4KlT9gMGILGLM2prBUKgvAK+OEfXVHv1XQQIBLglNhjP; lc-main=en_US; csm-hit=tb:MZ2WFEST02XDVXGHQARH+s-FT70C9NDRSSGTCF8XXWE|1580993848042&t:1580993848042&adb:adblk_yes")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.149 Safari/537.36")
+	req.Header.Set("cookie", "cookie: session-id=131-2340817-4143446; session-id-time=2082787201l; i18n-prefs=USD; ubid-main=130-9943017-9783306; x-wl-uid=1r1GuTQO+ZdaxMTNCQaBPkPjV1JoH/7k62hv/n+PgwdbaOywIv/oT43QJi0BLCdSKhI+FW+34KLA=; sp-cdn=\"L5Z9:TW\"; session-token=I4nDGHJRCv8peqQiV8somyA3CxVNvq8YC58ENj9DnVoNXEHUf4z2eQnJ9OQmXHzZVvVbjgXanYyfYJdeUplNMieHfD6yzkiZcoOwvKr+03vwrFj9i3D96uEunM6XVYYB4Rxz9HcvP8+nDhmYfpxM0kPHYzV5Pe0bKMzorC+AzoGsF8XfBUe8g4cwC/LixoFc; lc-main=zh_TW; csm-hit=tb:s-3SVQ6MVG3K376N91P8YV|1585799864163&t:1585799864378&adb:adblk_yes")
 	req.Header.Set("Referer", url)
+	req.Header.Set("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9")
 	resp, err := client.Do(req)
 	if err != nil {
 		fmt.Println("http get error", err)
@@ -315,6 +316,7 @@ func webCrawler() {
 
 type star struct {
 	name             string
+	url              string
 	onestarurl       string
 	twostarurl       string
 	threestarurl     string
@@ -328,34 +330,42 @@ type messages struct {
 	message string
 	author  string
 	title   string
+	date    string
 }
 
-func getmessage(input string) []messages {
+func (s *star) getmessage(input string, number string) []messages {
 	var message []messages
 	context := strings.Split(input, "\n")
 	for index, value := range context {
 		if strings.Contains(value, "customer_review-") {
 			var mess messages
-			author := regexp.MustCompile("<span class=\"a-profile-name\">\\s*([0-9,a-zA-Z]+)")
-			m := regexp.MustCompile("<span>\\s*([0-9,a-zA-Z.'? ]+)\\s*")
+			author := regexp.MustCompile("<span class=\"a-profile-name\">\\s*([^<]+)")
+			//m, _ := regexp.Compile("<span>([.]+)</span>")
+			date := regexp.MustCompile("Reviewed in the United States on\\s*([0-9,a-zA-Z ]+)")
 			if len(author.FindStringSubmatch(value)) > 1 {
 				mess.author = author.FindStringSubmatch(value)[1]
+				mess.message = context[index+22]
+				mess.message = strings.Replace(mess.message, "<span>", "", 1)
+				mess.message = strings.Replace(mess.message, "</span>", "", 1)
+				mess.message = strings.ReplaceAll(mess.message, "<br>", "\n")
+				mess.message = strings.ReplaceAll(mess.message, "<br />", "\n")
+				//fmt.Println(mess.author)
 			} else {
-				fmt.Println("can not find author")
+				fmt.Println(s.name + " " + number + " star can not find author")
+				continue
 			}
-			if len(m.FindStringSubmatch(context[index+10])) > 1 {
+			/*if len(m.FindStringSubmatch(context[index+10])) > 1 {
 				mess.title = m.FindStringSubmatch(context[index+10])[1]
-				fmt.Println(mess.title)
 			} else {
-				fmt.Println("can not find title")
-			}
-			if len(m.FindStringSubmatch(context[index+22])) > 1 {
-				mess.message = m.FindStringSubmatch(context[index+22])[1]
-				fmt.Println(mess.message)
+				fmt.Println(s.name + " " + number + " star can not find title")
+			}*/
+			if len(date.FindStringSubmatch(context[index+12])) > 1 {
+				mess.date = date.FindStringSubmatch(context[index+12])[1]
 			} else {
-				fmt.Println("can not find message")
+				fmt.Println(s.name + " " + number + " star can not find date")
 			}
 
+			//fmt.Println(mess.message)
 			message = append(message, mess)
 		}
 	}
@@ -380,28 +390,31 @@ func review() {
 		temp.productNumber = productNum.FindStringSubmatch(value)[1]
 		fmt.Println(temp.productNumber)
 		temp.name = strings.TrimSpace(strings.Split(value, "\\")[0])
+		temp.url = strings.TrimSpace(strings.Split(value, "\\")[1])
 		temp.onestarurl = "https://www.amazon.com/product-reviews/" + temp.productNumber + "/ref=acr_dp_hist_1?ie=UTF8&filterByStar=one_star&reviewerType=all_reviews#reviews-filter-bar"
 		temp.twostarurl = "https://www.amazon.com/product-reviews/" + temp.productNumber + "/ref=acr_dp_hist_1?ie=UTF8&filterByStar=two_star&reviewerType=all_reviews#reviews-filter-bar"
 		temp.threestarurl = "https://www.amazon.com/product-reviews/" + temp.productNumber + "/ref=acr_dp_hist_1?ie=UTF8&filterByStar=three_star&reviewerType=all_reviews#reviews-filter-bar"
 		_, context := queryhtmlToString(temp.onestarurl)
 		//fmt.Println(context)
-		temp.onestarmessage = getmessage(context)
+		temp.onestarmessage = temp.getmessage(context, "one")
+		time.Sleep(2000 * time.Millisecond)
 
 		_, context = queryhtmlToString(temp.twostarurl)
-		temp.twostarmessage = getmessage(context)
+		temp.twostarmessage = temp.getmessage(context, "two")
+		time.Sleep(2000 * time.Millisecond)
 
 		_, context = queryhtmlToString(temp.threestarurl)
-		temp.threestarmessage = getmessage(context)
-		fmt.Println(temp.onestarmessage)
-		fmt.Println(temp.twostarmessage)
-		fmt.Println(temp.threestarmessage)
+		temp.threestarmessage = temp.getmessage(context, "three")
 		result = append(result, temp)
-	}
 
+		time.Sleep(5000 * time.Millisecond)
+	}
+	fmt.Println("Collext finish!\nGenerating excel file, please wait.")
+	reviewoutput(result)
 }
 
-/*func reviewoutput(output []star) {
-	file, err := xlsx.OpenFile("reviewformat.xlsx")
+func reviewoutput(output []star) {
+	file, err := xlsx.OpenFile("format.xlsx")
 	if err != nil {
 		panic(err)
 	}
@@ -409,55 +422,63 @@ func review() {
 	row := first.AddRow()
 	row.SetHeightCM(1)
 	for _, value := range output {
-		cell := row.AddCell()
-		cell.Value = value.name
-		cell = row.AddCell()
-		cell.Value = "one star "
-		cell = row.AddCell()
-		cell.Value = value.price
-		if value.buyboxgone {
-			cell = row.AddCell()
-			cell.Value = "buybox gone"
-		}
-		if value.currentlyunavailable {
-			cell = row.AddCell()
-			cell.Value = "Currently Unavailable"
-		}
-		if value.lightningdeal {
-			cell = row.AddCell()
-			cell.Value = "lightning deal"
-		}
-		for _, j := range value.otherseller {
-			cell = row.AddCell()
-			cell.Value = "other seller"
-			cell = row.AddCell()
-			cell.Value = strings.Join(j, " for ")
-		}
-		for i, j := range value.rank {
-			row = first.AddRow()
-			row.SetHeightCM(1)
-			cell = row.AddCell()
+		fmt.Println()
+		for _, one := range value.onestarmessage {
+			cell := row.AddCell()
 			cell.Value = value.name
 			cell = row.AddCell()
-			cell.Value = value.leaderboard[i]
+			cell.Value = value.url
 			cell = row.AddCell()
-			cell.Value = j
+			cell.Value = one.author
+			cell = row.AddCell()
+			cell.Value = one.date
+			cell = row.AddCell()
+			cell.Value = "1"
+			cell = row.AddCell()
+			cell.Value = one.message
+			row = first.AddRow()
+			row.SetHeightCM(1)
+		}
+		for _, one := range value.twostarmessage {
+			cell := row.AddCell()
+			cell.Value = value.name
+			cell = row.AddCell()
+			cell.Value = value.url
+			cell = row.AddCell()
+			cell.Value = one.author
+			cell = row.AddCell()
+			cell.Value = one.date
+			cell = row.AddCell()
+			cell.Value = "2"
+			cell = row.AddCell()
+			cell.Value = one.message
+			row = first.AddRow()
+			row.SetHeightCM(1)
+		}
+		for _, one := range value.threestarmessage {
+			cell := row.AddCell()
+			cell.Value = value.name
+			cell = row.AddCell()
+			cell.Value = value.url
+			cell = row.AddCell()
+			cell.Value = one.author
+			cell = row.AddCell()
+			cell.Value = one.date
+			cell = row.AddCell()
+			cell.Value = "3"
+			cell = row.AddCell()
+			cell.Value = one.message
+			row = first.AddRow()
+			row.SetHeightCM(1)
 		}
 
-		row = first.AddRow()
-		cell = row.AddCell()
-		cell.Value = value.name
-		cell = row.AddCell()
-		cell.Value = "Sold"
-		row = first.AddRow()
-		row.SetHeightCM(1)
 	}
 
-	err = file.Save("Output.xlsx")
+	err = file.Save("ReviewOutput.xlsx")
 	if err != nil {
 		panic(err)
 	}
-}*/
+}
 
 func main() {
 	//webCrawler()
