@@ -373,7 +373,7 @@ func (s *star) getmessage(input string, number string) []messages {
 }
 
 func review() {
-	content, err := ioutil.ReadFile("url")
+	content, err := ioutil.ReadFile("url.txt")
 	if err != nil {
 		fmt.Println("Read file error: ", err)
 	}
@@ -384,13 +384,24 @@ func review() {
 	//var twostar []star
 	//var onestar []star
 	result := []star{}
-	productNum, _ := regexp.Compile("dp/\\s*([0-9a-zA-z?=;_&]+)")
+	productNum, _ := regexp.Compile("dp/\\s*([0-9a-zA-Z]+)")
+	conreview, _ := regexp.Compile("product-reviews/\\s*([0-9a-zA-Z]+)")
 	for _, value := range parseurl {
 		var temp star
-		temp.productNumber = productNum.FindStringSubmatch(value)[1]
-		fmt.Println(temp.productNumber)
 		temp.name = strings.TrimSpace(strings.Split(value, "\\")[0])
 		temp.url = strings.TrimSpace(strings.Split(value, "\\")[1])
+		if len(productNum.FindStringSubmatch(value)) > 1 {
+			temp.productNumber = productNum.FindStringSubmatch(value)[1]
+		} else {
+			if len(conreview.FindStringSubmatch(value)) > 1 {
+				temp.productNumber = conreview.FindStringSubmatch(value)[1]
+			} else {
+				fmt.Println(temp.name + " can not parse url, please confirm.")
+			}
+		}
+
+		fmt.Println(temp.name)
+		//fmt.Println(temp.productNumber)
 		temp.onestarurl = "https://www.amazon.com/product-reviews/" + temp.productNumber + "/ref=acr_dp_hist_1?ie=UTF8&filterByStar=one_star&reviewerType=all_reviews#reviews-filter-bar"
 		temp.twostarurl = "https://www.amazon.com/product-reviews/" + temp.productNumber + "/ref=acr_dp_hist_1?ie=UTF8&filterByStar=two_star&reviewerType=all_reviews#reviews-filter-bar"
 		temp.threestarurl = "https://www.amazon.com/product-reviews/" + temp.productNumber + "/ref=acr_dp_hist_1?ie=UTF8&filterByStar=three_star&reviewerType=all_reviews#reviews-filter-bar"
