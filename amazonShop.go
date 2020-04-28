@@ -6,8 +6,10 @@ import (
 	"log"
 	"net/http"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -56,10 +58,10 @@ type item struct {
 func queryhtmlToResp(url string) *http.Response {
 	client := &http.Client{}
 	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.149 Safari/537.36")
-	req.Header.Set("cookie", "cookie: session-id=131-2340817-4143446; session-id-time=2082787201l; i18n-prefs=USD; ubid-main=130-9943017-9783306; x-wl-uid=1r1GuTQO+ZdaxMTNCQaBPkPjV1JoH/7k62hv/n+PgwdbaOywIv/oT43QJi0BLCdSKhI+FW+34KLA=; sp-cdn=\"L5Z9:TW\"; session-token=I4nDGHJRCv8peqQiV8somyA3CxVNvq8YC58ENj9DnVoNXEHUf4z2eQnJ9OQmXHzZVvVbjgXanYyfYJdeUplNMieHfD6yzkiZcoOwvKr+03vwrFj9i3D96uEunM6XVYYB4Rxz9HcvP8+nDhmYfpxM0kPHYzV5Pe0bKMzorC+AzoGsF8XfBUe8g4cwC/LixoFc; lc-main=zh_TW; csm-hit=tb:s-3SVQ6MVG3K376N91P8YV|1585799864163&t:1585799864378&adb:adblk_yes")
-	req.Header.Set("Referer", url)
-	req.Header.Set("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9")
+	req.Header.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.149 Safari/537.36")
+	req.Header.Add("cookie", "cookie: session-id=131-2340817-4143446; session-id-time=2082787201l; i18n-prefs=USD; ubid-main=130-9943017-9783306; x-wl-uid=1r1GuTQO+ZdaxMTNCQaBPkPjV1JoH/7k62hv/n+PgwdbaOywIv/oT43QJi0BLCdSKhI+FW+34KLA=; sp-cdn=\"L5Z9:TW\"; session-token=I4nDGHJRCv8peqQiV8somyA3CxVNvq8YC58ENj9DnVoNXEHUf4z2eQnJ9OQmXHzZVvVbjgXanYyfYJdeUplNMieHfD6yzkiZcoOwvKr+03vwrFj9i3D96uEunM6XVYYB4Rxz9HcvP8+nDhmYfpxM0kPHYzV5Pe0bKMzorC+AzoGsF8XfBUe8g4cwC/LixoFc; lc-main=zh_TW; csm-hit=tb:s-3SVQ6MVG3K376N91P8YV|1585799864163&t:1585799864378&adb:adblk_yes")
+	req.Header.Add("Referer", url)
+	req.Header.Add("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9")
 	resp, err := client.Do(req)
 	if err != nil {
 		fmt.Println("http get error", err)
@@ -327,21 +329,29 @@ type star struct {
 }
 
 type messages struct {
-	message string
-	author  string
-	title   string
-	date    string
+	name      string
+	url       string
+	message   string
+	author    string
+	title     string
+	date      string
+	star      string
+	timestamp int64
 }
+
+var outputmessage []messages
+var emptymessage []string
 
 func (s *star) getmessage(input string, number string) []messages {
 	var message []messages
+	var url string
 	context := strings.Split(input, "\n")
 	for index, value := range context {
 		if strings.Contains(value, "customer_review-") {
 			var mess messages
+			reviewIndex := regexp.MustCompile("customer_review-\\s*([A-Za-z0-9]+)")
 			author := regexp.MustCompile("<span class=\"a-profile-name\">\\s*([^<]+)")
-			//m, _ := regexp.Compile("<span>([.]+)</span>")
-			date := regexp.MustCompile("Reviewed in the United States on\\s*([0-9,a-zA-Z ]+)")
+			date := regexp.MustCompile("Reviewed in the [a-zA-Z ]+ on\\s*([0-9,a-zA-Z ]+)")
 			if len(author.FindStringSubmatch(value)) > 1 {
 				mess.author = author.FindStringSubmatch(value)[1]
 				mess.message = context[index+22]
@@ -350,6 +360,7 @@ func (s *star) getmessage(input string, number string) []messages {
 				mess.message = strings.ReplaceAll(mess.message, "<br>", "\n")
 				mess.message = strings.ReplaceAll(mess.message, "<br />", "\n")
 				//fmt.Println(mess.author)
+				//fmt.Println(mess.message)
 			} else {
 				fmt.Println(s.name + " " + number + " star can not find author")
 				continue
@@ -360,24 +371,60 @@ func (s *star) getmessage(input string, number string) []messages {
 				fmt.Println(s.name + " " + number + " star can not find title")
 			}*/
 			if len(date.FindStringSubmatch(context[index+12])) > 1 {
+				format := "January 2, 2006"
 				mess.date = date.FindStringSubmatch(context[index+12])[1]
+				d, err := time.Parse(format, date.FindStringSubmatch(context[index+12])[1])
+				mess.timestamp = d.Unix()
+				if err != nil {
+					fmt.Println(s.name, number, "star date parse error: ", err)
+				}
 			} else {
 				fmt.Println(s.name + " " + number + " star can not find date")
 			}
 
+			if len(reviewIndex.FindStringSubmatch(value)) > 1 {
+				url = "https://www.amazon.com/gp/customer-reviews/" + reviewIndex.FindStringSubmatch(value)[1] + "/ref=cm_cr_arp_d_rvw_ttl?ie=UTF8"
+			} else {
+				url = "Can not find url"
+			}
+
 			//fmt.Println(mess.message)
+			mess.star = number
+			mess.name = s.name
+			mess.url = url
 			message = append(message, mess)
+			outputmessage = append(outputmessage, mess)
 		}
+	}
+
+	if len(message) == 0 {
+		fmt.Println(s.name, number, "star comment is empty. Please check.")
+		emptymessage = append(emptymessage, s.name)
 	}
 	return message
 }
 
+var inputfile = "test.txt"
+
+type ByTimastamp []messages
+
+func (a ByTimastamp) Len() int           { return len(a) }
+func (a ByTimastamp) Less(i, j int) bool { return a[i].timestamp > a[j].timestamp }
+func (a ByTimastamp) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+
+func (s *star) setUrl() {
+	u := strings.Split(s.url, "?")
+	s.onestarurl = u[0] + "?reviewerType=all_reviews&filterByStar=one_star"
+	s.twostarurl = u[0] + "?reviewerType=all_reviews&filterByStar=two_star"
+	s.threestarurl = u[0] + "?reviewerType=all_reviews&filterByStar=three_star"
+}
+
 func review() {
-	content, err := ioutil.ReadFile("url.txt")
+	content, err := ioutil.ReadFile(inputfile)
 	if err != nil {
 		fmt.Println("Read file error: ", err)
 	}
-	body := string(content)
+	body := strings.TrimSpace(string(content))
 
 	parseurl := strings.Split(body, "\n")
 	//var threestar []star
@@ -386,45 +433,97 @@ func review() {
 	result := []star{}
 	productNum, _ := regexp.Compile("dp/\\s*([0-9a-zA-Z]+)")
 	conreview, _ := regexp.Compile("product-reviews/\\s*([0-9a-zA-Z]+)")
+	var wg sync.WaitGroup
 	for _, value := range parseurl {
-		var temp star
-		temp.name = strings.TrimSpace(strings.Split(value, "\\")[0])
-		temp.url = strings.TrimSpace(strings.Split(value, "\\")[1])
-		if len(productNum.FindStringSubmatch(value)) > 1 {
-			temp.productNumber = productNum.FindStringSubmatch(value)[1]
-		} else {
-			if len(conreview.FindStringSubmatch(value)) > 1 {
-				temp.productNumber = conreview.FindStringSubmatch(value)[1]
+		wg.Add(1)
+		go func(value string) {
+			defer wg.Done()
+			var temp star
+			temp.name = strings.TrimSpace(strings.Split(value, "\\")[0])
+			temp.url = strings.TrimSpace(strings.Split(value, "\\")[1])
+			if len(productNum.FindStringSubmatch(value)) > 1 {
+				temp.productNumber = productNum.FindStringSubmatch(value)[1]
 			} else {
-				fmt.Println(temp.name + " can not parse url, please confirm.")
+				if len(conreview.FindStringSubmatch(value)) > 1 {
+					temp.productNumber = conreview.FindStringSubmatch(value)[1]
+				} else {
+					fmt.Println(temp.name + " can not parse url, please confirm.")
+				}
 			}
-		}
 
-		fmt.Println(temp.name)
-		//fmt.Println(temp.productNumber)
-		temp.onestarurl = "https://www.amazon.com/product-reviews/" + temp.productNumber + "/ref=acr_dp_hist_1?ie=UTF8&filterByStar=one_star&reviewerType=all_reviews#reviews-filter-bar"
-		temp.twostarurl = "https://www.amazon.com/product-reviews/" + temp.productNumber + "/ref=acr_dp_hist_1?ie=UTF8&filterByStar=two_star&reviewerType=all_reviews#reviews-filter-bar"
-		temp.threestarurl = "https://www.amazon.com/product-reviews/" + temp.productNumber + "/ref=acr_dp_hist_1?ie=UTF8&filterByStar=three_star&reviewerType=all_reviews#reviews-filter-bar"
-		_, context := queryhtmlToString(temp.onestarurl)
-		//fmt.Println(context)
-		temp.onestarmessage = temp.getmessage(context, "one")
-		time.Sleep(2000 * time.Millisecond)
+			fmt.Println(temp.name)
+			//fmt.Println(temp.productNumber)
+			/*temp.onestarurl = "https://www.amazon.com/product-reviews/" + temp.productNumber + "?ie=UTF8&filterByStar=one_star&reviewerType=all_reviews"
+			temp.twostarurl = "https://www.amazon.com/product-reviews/" + temp.productNumber + "?ie=UTF8&filterByStar=two_star&reviewerType=all_reviews"
+			temp.threestarurl = "https://www.amazon.com/product-reviews/" + temp.productNumber + "?ie=UTF8&filterByStar=three_star&reviewerType=all_reviews"*/
+			temp.setUrl()
+			_, context := queryhtmlToString(temp.onestarurl)
+			//fmt.Println(context)
+			page := getPage(context)
+			urltemp := temp.onestarurl
+			for i := 1; i <= page; i++ {
 
-		_, context = queryhtmlToString(temp.twostarurl)
-		temp.twostarmessage = temp.getmessage(context, "two")
-		time.Sleep(2000 * time.Millisecond)
+				temp.onestarmessage = temp.getmessage(context, "1")
+				time.Sleep(5000 * time.Millisecond)
+				urltemp = temp.onestarurl + "&pageNumber=" + strconv.Itoa(i+1)
+				_, context = queryhtmlToString(urltemp)
+			}
 
-		_, context = queryhtmlToString(temp.threestarurl)
-		temp.threestarmessage = temp.getmessage(context, "three")
-		result = append(result, temp)
+			urltemp = temp.twostarurl
+			_, context = queryhtmlToString(temp.twostarurl)
+			page = getPage(context)
+			for i := 1; i <= page; i++ {
 
-		time.Sleep(5000 * time.Millisecond)
+				temp.twostarmessage = temp.getmessage(context, "2")
+				time.Sleep(5000 * time.Millisecond)
+				urltemp := temp.twostarurl + "&pageNumber=" + strconv.Itoa(i+1)
+				_, context = queryhtmlToString(urltemp)
+			}
+
+			urltemp = temp.threestarurl
+			page = getPage(context)
+			for i := 1; i <= page; i++ {
+
+				_, context = queryhtmlToString(temp.threestarurl)
+				temp.threestarmessage = temp.getmessage(context, "3")
+				time.Sleep(5000 * time.Millisecond)
+				urltemp := temp.threestarurl + "&pageNumber=" + strconv.Itoa(i+1)
+				_, context = queryhtmlToString(urltemp)
+			}
+
+			result = append(result, temp)
+
+			//
+		}(value)
+
+		//time.Sleep(5000 * time.Millisecond)
 	}
+	wg.Wait()
 	fmt.Println("Collext finish!\nGenerating excel file, please wait.")
-	reviewoutput(result)
+	sort.Sort(ByTimastamp(outputmessage))
+	reviewoutput(outputmessage)
+	fmt.Println("The product of empty message have:")
+	for _, empty := range emptymessage {
+		fmt.Println(empty)
+	}
 }
 
-func reviewoutput(output []star) {
+func getPage(input string) int {
+	showPage := regexp.MustCompile("class=\"a-size-base\">Showing 1-10 of\\s*([0-9]+)")
+	//context := strings.Split(input, "\n")
+
+	if len(showPage.FindStringSubmatch(input)) > 1 {
+		messageNumber := showPage.FindStringSubmatch(input)[1]
+		result, err := strconv.Atoi(messageNumber)
+		if err != nil {
+			fmt.Printf("Get message number error %v", err)
+		}
+		return (result / 10) + 1
+	}
+	return 1
+}
+
+func reviewoutput(output []messages) {
 	file, err := xlsx.OpenFile("format.xlsx")
 	if err != nil {
 		panic(err)
@@ -433,55 +532,21 @@ func reviewoutput(output []star) {
 	row := first.AddRow()
 	row.SetHeightCM(1)
 	for _, value := range output {
-		fmt.Println()
-		for _, one := range value.onestarmessage {
-			cell := row.AddCell()
-			cell.Value = value.name
-			cell = row.AddCell()
-			cell.Value = value.url
-			cell = row.AddCell()
-			cell.Value = one.author
-			cell = row.AddCell()
-			cell.Value = one.date
-			cell = row.AddCell()
-			cell.Value = "1"
-			cell = row.AddCell()
-			cell.Value = one.message
-			row = first.AddRow()
-			row.SetHeightCM(1)
-		}
-		for _, one := range value.twostarmessage {
-			cell := row.AddCell()
-			cell.Value = value.name
-			cell = row.AddCell()
-			cell.Value = value.url
-			cell = row.AddCell()
-			cell.Value = one.author
-			cell = row.AddCell()
-			cell.Value = one.date
-			cell = row.AddCell()
-			cell.Value = "2"
-			cell = row.AddCell()
-			cell.Value = one.message
-			row = first.AddRow()
-			row.SetHeightCM(1)
-		}
-		for _, one := range value.threestarmessage {
-			cell := row.AddCell()
-			cell.Value = value.name
-			cell = row.AddCell()
-			cell.Value = value.url
-			cell = row.AddCell()
-			cell.Value = one.author
-			cell = row.AddCell()
-			cell.Value = one.date
-			cell = row.AddCell()
-			cell.Value = "3"
-			cell = row.AddCell()
-			cell.Value = one.message
-			row = first.AddRow()
-			row.SetHeightCM(1)
-		}
+		//fmt.Println()
+		cell := row.AddCell()
+		cell.Value = value.name
+		cell = row.AddCell()
+		cell.Value = value.url
+		cell = row.AddCell()
+		cell.Value = value.author
+		cell = row.AddCell()
+		cell.Value = value.date
+		cell = row.AddCell()
+		cell.Value = value.star
+		cell = row.AddCell()
+		cell.Value = value.message
+		row = first.AddRow()
+		row.SetHeightCM(1)
 
 	}
 
@@ -494,6 +559,7 @@ func reviewoutput(output []star) {
 func main() {
 	//webCrawler()
 	review()
+
 	fmt.Println("Finish！")
 	fmt.Scanln()
 }
