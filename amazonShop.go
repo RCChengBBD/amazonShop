@@ -319,6 +319,7 @@ func webCrawler() {
 type star struct {
 	name             string
 	url              string
+	totalStar        string
 	onestarurl       string
 	twostarurl       string
 	threestarurl     string
@@ -362,8 +363,22 @@ func (s *star) getmessage(input string, number string) []messages {
 				//fmt.Println(mess.author)
 				//fmt.Println(mess.message)
 			} else {
-				fmt.Println(s.name + " " + number + " star can not find author")
-				continue
+				if len(author.FindStringSubmatch(context[index+2])) > 1 {
+					mess.author = author.FindStringSubmatch(context[index+2])[1]
+					mess.message = context[index+28]
+					mess.message = strings.Replace(mess.message, "<span>", "", 1)
+					mess.message = strings.Replace(mess.message, "</span>", "", 1)
+					mess.message = strings.ReplaceAll(mess.message, "<br>", "\n")
+					mess.message = strings.ReplaceAll(mess.message, "<br />", "\n")
+					//fmt.Println(mess.author)
+					//fmt.Println(mess.message)
+				} else {
+					fmt.Println(s.name + " " + number + " star can not find author")
+					fmt.Println(value)
+					fmt.Println(index)
+					fmt.Println(s.twostarurl)
+					continue
+				}
 			}
 			/*if len(m.FindStringSubmatch(context[index+10])) > 1 {
 				mess.title = m.FindStringSubmatch(context[index+10])[1]
@@ -404,7 +419,7 @@ func (s *star) getmessage(input string, number string) []messages {
 	return message
 }
 
-var inputfile = "test.txt"
+var inputfile = "url.txt"
 
 type ByTimastamp []messages
 
@@ -412,11 +427,11 @@ func (a ByTimastamp) Len() int           { return len(a) }
 func (a ByTimastamp) Less(i, j int) bool { return a[i].timestamp > a[j].timestamp }
 func (a ByTimastamp) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
-func (s *star) setUrl() {
-	u := strings.Split(s.url, "?")
-	s.onestarurl = u[0] + "?reviewerType=all_reviews&filterByStar=one_star"
-	s.twostarurl = u[0] + "?reviewerType=all_reviews&filterByStar=two_star"
-	s.threestarurl = u[0] + "?reviewerType=all_reviews&filterByStar=three_star"
+func (s *star) setURL() {
+	u := strings.Split(s.url, "/ref=")
+	s.onestarurl = u[0] + "/ref=cm_cr_unknown?formatType=current_format&reviewerType=all_reviews&filterByStar=one_star&sortBy=recent"
+	s.twostarurl = u[0] + "/ref=cm_cr_unknown?formatType=current_format&reviewerType=all_reviews&filterByStar=two_star&sortBy=recent"
+	s.threestarurl = u[0] + "/ref=cm_cr_unknown?formatType=current_format&reviewerType=all_reviews&filterByStar=three_star&sortBy=recent"
 }
 
 func review() {
@@ -434,6 +449,7 @@ func review() {
 	productNum, _ := regexp.Compile("dp/\\s*([0-9a-zA-Z]+)")
 	conreview, _ := regexp.Compile("product-reviews/\\s*([0-9a-zA-Z]+)")
 	var wg sync.WaitGroup
+	//var lock sync.Mutex
 	for _, value := range parseurl {
 		wg.Add(1)
 		go func(value string) {
@@ -452,19 +468,18 @@ func review() {
 			}
 
 			fmt.Println(temp.name)
-			//fmt.Println(temp.productNumber)
-			/*temp.onestarurl = "https://www.amazon.com/product-reviews/" + temp.productNumber + "?ie=UTF8&filterByStar=one_star&reviewerType=all_reviews"
-			temp.twostarurl = "https://www.amazon.com/product-reviews/" + temp.productNumber + "?ie=UTF8&filterByStar=two_star&reviewerType=all_reviews"
-			temp.threestarurl = "https://www.amazon.com/product-reviews/" + temp.productNumber + "?ie=UTF8&filterByStar=three_star&reviewerType=all_reviews"*/
-			temp.setUrl()
+
+			temp.setURL()
 			_, context := queryhtmlToString(temp.onestarurl)
-			//fmt.Println(context)
+
+			//temp.getTotalStar(context) //get the total star
+
 			page := getPage(context)
+
 			urltemp := temp.onestarurl
 			for i := 1; i <= page; i++ {
 
 				temp.onestarmessage = temp.getmessage(context, "1")
-				time.Sleep(5000 * time.Millisecond)
 				urltemp = temp.onestarurl + "&pageNumber=" + strconv.Itoa(i+1)
 				_, context = queryhtmlToString(urltemp)
 			}
@@ -475,23 +490,22 @@ func review() {
 			for i := 1; i <= page; i++ {
 
 				temp.twostarmessage = temp.getmessage(context, "2")
-				time.Sleep(5000 * time.Millisecond)
 				urltemp := temp.twostarurl + "&pageNumber=" + strconv.Itoa(i+1)
 				_, context = queryhtmlToString(urltemp)
 			}
 
 			urltemp = temp.threestarurl
+			_, context = queryhtmlToString(temp.threestarurl)
 			page = getPage(context)
 			for i := 1; i <= page; i++ {
-
-				_, context = queryhtmlToString(temp.threestarurl)
 				temp.threestarmessage = temp.getmessage(context, "3")
-				time.Sleep(5000 * time.Millisecond)
 				urltemp := temp.threestarurl + "&pageNumber=" + strconv.Itoa(i+1)
 				_, context = queryhtmlToString(urltemp)
 			}
 
+			//lock.Lock()
 			result = append(result, temp)
+			//lock.Unlock()
 
 			//
 		}(value)
@@ -502,9 +516,25 @@ func review() {
 	fmt.Println("Collext finish!\nGenerating excel file, please wait.")
 	sort.Sort(ByTimastamp(outputmessage))
 	reviewoutput(outputmessage)
+	starOutput(result)
 	fmt.Println("The product of empty message have:")
 	for _, empty := range emptymessage {
 		fmt.Println(empty)
+	}
+}
+
+func (s *star) getTotalStar(input string) {
+	context := strings.Split(input, "\n")
+	for _, value := range context {
+		if strings.Contains(value, "reviewNumericalSummary") {
+			totalStar := regexp.MustCompile("<span class=\"a-icon-alt\">\\s*([0-9.]+)")
+			if len(totalStar.FindStringSubmatch(value)) > 1 {
+				s.totalStar = totalStar.FindStringSubmatch(value)[1]
+				break
+			} else {
+				fmt.Printf("Can not find %s tital star", s.name)
+			}
+		}
 	}
 }
 
@@ -518,11 +548,40 @@ func getPage(input string) int {
 		if err != nil {
 			fmt.Printf("Get message number error %v", err)
 		}
-		return (result / 10) + 1
+		if result%10 == 0 {
+			return (result / 10)
+		} else {
+			return (result / 10) + 1
+		}
 	}
 	return 1
 }
 
+func starOutput(output []star) {
+	file, err := xlsx.OpenFile("format.xlsx")
+	if err != nil {
+		panic(err)
+	}
+	first := file.Sheets[0]
+	row := first.AddRow()
+	row.SetHeightCM(1)
+	for _, value := range output {
+		//fmt.Println()
+		cell := row.AddCell()
+		cell.Value = value.name
+		cell = row.AddCell()
+		cell.Value = value.totalStar
+
+		row = first.AddRow()
+		row.SetHeightCM(1)
+
+	}
+
+	err = file.Save("StarOutput.xlsx")
+	if err != nil {
+		panic(err)
+	}
+}
 func reviewoutput(output []messages) {
 	file, err := xlsx.OpenFile("format.xlsx")
 	if err != nil {
@@ -531,6 +590,7 @@ func reviewoutput(output []messages) {
 	first := file.Sheets[0]
 	row := first.AddRow()
 	row.SetHeightCM(1)
+	fmt.Println(len(output))
 	for _, value := range output {
 		//fmt.Println()
 		cell := row.AddCell()
