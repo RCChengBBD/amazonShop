@@ -1,1 +1,3 @@
 Practicing how to call amazon shop's api. 
+
+make executable file :go build -o amazonShop.exe
