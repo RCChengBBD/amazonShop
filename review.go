@@ -181,7 +181,7 @@ func output(output []item) {
 func webCrawler() {
 	findSubURL, _ := regexp.Compile("offer-listing/\\s*([0-9a-zA-z?=;/_&]+)")
 
-	content, err := ioutil.ReadFile(inputfile)
+	content, err := ioutil.ReadFile("web.txt")
 	if err != nil {
 		fmt.Println("Read file error: ", err)
 	}
@@ -195,10 +195,10 @@ func webCrawler() {
 		temp.url = strings.TrimSpace(strings.Split(value, "\\")[1]) + "?language=en_US"
 		fmt.Println("Collecting url", temp.url)
 		_, html := utility.QueryhtmlToString(temp.url)
-		err = ioutil.WriteFile(temp.name, []byte(html), 0644)
+		/*err = ioutil.WriteFile(temp.name, []byte(html), 0644)
 		if err != nil {
 			panic(err)
-		}
+		}*/
 		if len(findSubURL.FindStringSubmatch(html)) > 1 {
 			fmt.Println(findSubURL.FindStringSubmatch(html))
 			temp.otherseller, temp.price = otherSeller(findSubURL.FindStringSubmatch(html)[1])

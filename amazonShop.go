@@ -4,15 +4,17 @@ import (
 	"fmt"
 	"io/ioutil"
 	"strings"
+	"sync"
 
 	"github.com/NUKBBD/amazonShop/plugins/touchpage"
 )
 
 const (
-	inputfile      = "url.txt"
-	price          = false //For Yawen to grep price
-	commentAndStar = false //For Lucy To grep Star and comment
-	touch          = true  //For JJ to touch competitor's page
+	review_Tracking = "review tracking.txt"
+	inputfile       = "url.txt"
+	price           = false //For Yawen to grep price
+	commentAndStar  = true  //For Lucy To grep Star and comment
+	touch           = false //For JJ to touch competitor's page
 )
 
 //ReadForKeyWord search for amazon keyword return string array for keyWord
@@ -35,18 +37,32 @@ func ReadForKeyWord(file string) []string {
 func main() {
 	//webCrawler()
 	//review()
+	var wg sync.WaitGroup
 
-	if price {
-		webCrawler()
-	}
-	if commentAndStar {
-		review()
-	}
-	if touch {
-		keyword := ReadForKeyWord(inputfile)
-		touchpage.TouchKeywordPage(keyword)
-	}
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		if price {
+			webCrawler()
+		}
+	}()
 
+	go func() {
+		defer wg.Done()
+		if commentAndStar {
+			review()
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		if touch {
+			keyword := ReadForKeyWord(inputfile)
+			touchpage.TouchKeywordPage(keyword)
+		}
+	}()
+
+	wg.Wait()
 	fmt.Println("Finish！")
 	fmt.Scanln()
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -52,7 +53,7 @@ func (s *star) getmessage(input string, number string) []messages {
 			date := regexp.MustCompile("Reviewed in the [a-zA-Z ]+ on\\s*([0-9,a-zA-Z ]+)")
 			if len(author.FindStringSubmatch(value)) > 1 {
 				mess.author = author.FindStringSubmatch(value)[1]
-				mess.message = context[index+22]
+				mess.message = context[index+25]
 				mess.message = strings.Replace(mess.message, "<span>", "", 1)
 				mess.message = strings.Replace(mess.message, "</span>", "", 1)
 				mess.message = strings.ReplaceAll(mess.message, "<br>", "\n")
@@ -71,9 +72,9 @@ func (s *star) getmessage(input string, number string) []messages {
 					//fmt.Println(mess.message)
 				} else {
 					fmt.Println(s.name + " " + number + " star can not find author")
-					fmt.Println(value)
-					fmt.Println(index)
-					fmt.Println(s.twostarurl)
+					//fmt.Println(value)
+					//fmt.Println(index)
+					//fmt.Println(s.twostarurl)
 					continue
 				}
 			}
@@ -123,7 +124,7 @@ func reviewoutput(output []messages) {
 	first := file.Sheets[0]
 	row := first.AddRow()
 	row.SetHeightCM(1)
-	fmt.Println(len(output))
+	//fmt.Println(len(output))
 	for _, value := range output {
 		//fmt.Println()
 		cell := row.AddCell()
@@ -205,9 +206,9 @@ func (a ByTimastamp) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
 func (s *star) setURL() {
 	u := strings.Split(s.url, "/ref=")
-	s.onestarurl = u[0] + "/ref=cm_cr_unknown?formatType=current_format&reviewerType=all_reviews&filterByStar=one_star&sortBy=recent"
-	s.twostarurl = u[0] + "/ref=cm_cr_unknown?formatType=current_format&reviewerType=all_reviews&filterByStar=two_star&sortBy=recent"
-	s.threestarurl = u[0] + "/ref=cm_cr_unknown?formatType=current_format&reviewerType=all_reviews&filterByStar=three_star&sortBy=recent"
+	s.onestarurl = u[0] + "/ref=cm_cr_unknown?formatType=current_format&language=en_US&reviewerType=all_reviews&filterByStar=one_star&sortBy=recent"
+	s.twostarurl = u[0] + "/ref=cm_cr_unknown?formatType=current_format&language=en_US&reviewerType=all_reviews&filterByStar=two_star&sortBy=recent"
+	s.threestarurl = u[0] + "/ref=cm_cr_unknown?formatType=current_format&language=en_US&reviewerType=all_reviews&filterByStar=three_star&sortBy=recent"
 }
 
 func review() {
@@ -248,7 +249,7 @@ func review() {
 			temp.setURL()
 			_, context := utility.QueryhtmlToString(temp.onestarurl)
 
-			//temp.getTotalStar(context) //get the total star
+			temp.getTotalStar(context) //get the total star
 
 			page := getPage(context)
 
@@ -287,9 +288,9 @@ func review() {
 	}
 	wg.Wait()
 	fmt.Println("Collext finish!\nGenerating excel file, please wait.")
-	//sort.Sort(ByTimastamp(outputmessage))
+	sort.Sort(ByTimastamp(outputmessage))
 	reviewoutput(outputmessage)
-	//starOutput(result)
+	starOutput(result)
 	fmt.Println("The product of empty message have:")
 	/*for _, empty := range emptymessage {
 		fmt.Println(empty)
@@ -297,15 +298,17 @@ func review() {
 }
 
 func (s *star) getTotalStar(input string) {
+
 	context := strings.Split(input, "\n")
 	for _, value := range context {
-		if strings.Contains(value, "reviewNumericalSummary") {
+		if strings.Contains(value, "reviewNumericalSummary") || strings.Contains(value, "averageStarRatingNumerical") {
 			totalStar := regexp.MustCompile("<span class=\"a-icon-alt\">\\s*([0-9.]+)")
 			if len(totalStar.FindStringSubmatch(value)) > 1 {
 				if strings.TrimSpace(totalStar.FindStringSubmatch(value)[1]) == "" {
 					s.totalStar = "N/A"
 				} else {
 					s.totalStar = totalStar.FindStringSubmatch(value)[1]
+					//fmt.Println(s.totalStar)
 				}
 				break
 			} else {
