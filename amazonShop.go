@@ -13,12 +13,12 @@ const (
 	review_Tracking = "review tracking.txt"
 	inputfile       = "url.txt"
 	price           = false //For Yawen to grep price
-	commentAndStar  = true  //For Lucy To grep Star and comment
-	touch           = false //For JJ to touch competitor's page
+	commentAndStar  = false //For Lucy To grep Star and comment
+	touch           = true  //For JJ to touch competitor's page
 )
 
 //ReadForKeyWord search for amazon keyword return string array for keyWord
-func ReadForKeyWord(file string) []string {
+func ReadForKeyWord(file string) ([]string, []string) {
 
 	content, err := ioutil.ReadFile(file)
 	if err != nil {
@@ -27,11 +27,22 @@ func ReadForKeyWord(file string) []string {
 	body := strings.TrimSpace(string(content))
 
 	var keyWord = []string{}
+	var avoidsWord = []string{}
+	var avoids bool = false
 
 	for _, key := range strings.Split(body, "\n") {
-		keyWord = append(keyWord, strings.TrimSpace(key))
+		if strings.Contains(key, "avoids:") {
+			avoids = true
+			continue
+		}
+
+		if avoids {
+			avoidsWord = append(avoidsWord, strings.TrimSpace(key))
+		} else {
+			keyWord = append(keyWord, strings.Replace(strings.TrimSpace(key), " ", "+", -1))
+		}
 	}
-	return keyWord
+	return keyWord, avoidsWord
 }
 
 func main() {
@@ -57,8 +68,11 @@ func main() {
 	go func() {
 		defer wg.Done()
 		if touch {
-			keyword := ReadForKeyWord(inputfile)
-			touchpage.TouchKeywordPage(keyword)
+			keyword, avoidsWord := ReadForKeyWord("keyword.txt")
+			err := touchpage.TouchKeywordPage(keyword, avoidsWord)
+			if err != nil {
+				fmt.Println(err)
+			}
 		}
 	}()
 

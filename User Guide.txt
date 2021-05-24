@@ -1,0 +1,7 @@
+The PingShop.exe is used to keep ping the amazon shop page.
+User Guide:
+1.Modified the keyword.txt
+2.Typing in the word that the keyword you wany to search.
+3.Beyond the "avoids:" is the the keyword you want to aviod, such as "Picasso tiles" that the program will aviod the page if the title contains the word "Picasso tiles".
+4.Then click on PingShop.exe than the log message will show on terminal.
+5.If there is any problem, please contact me: s0918083055@gmail.com
